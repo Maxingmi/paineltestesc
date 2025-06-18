@@ -1,119 +1,105 @@
-/**
- * This is the main Node.js server script for your project
- * Check out the two endpoints this back-end API provides in fastify.get and fastify.post below
- */
+// server.js - Versão Final com Correção de Sintaxe
 
-const path = require("path");
+const express = require('express');
+const http = require('http');
+const { Server } = require("socket.io");
 
-// Require the fastify framework and instantiate it
-const fastify = require("fastify")({
-  // Set this to true for detailed logging:
-  logger: false,
-});
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
 
-// ADD FAVORITES ARRAY VARIABLE FROM TODO HERE
+// Sua programação completa
+const programacao = [
+    ['19:00', 'ROTA 069/072'],
+    ['20:30', 'ROTA 039'],
+    ['22:00', 'ROTA 068/081-043/049'],
+    ['23:00', 'ROTA 029/055/026'],
+    ['23:50', 'ROTA 030/086'],
+    ['00:00', 'ROTA 035/037'],
+    ['00:15', 'ROTA 045/076'],
+    ['01:30', 'ROTA 007/036'],
+    ['02:30', 'ROTA 064/066'],
+    ['03:40', 'ROTA 044'],
+    ['04:00', 'ROTA 033/038'],
+    ['05:00', 'ROTA 006/034']
+];
 
-// Setup our static files
-fastify.register(require("@fastify/static"), {
-  root: path.join(__dirname, "public"),
-  prefix: "/", // optional: default '/'
-});
+app.use(express.static('public'));
 
-// Formbody lets us parse incoming forms
-fastify.register(require("@fastify/formbody"));
+let rotasPassadas = [];
 
-// View is a templating manager for fastify
-fastify.register(require("@fastify/view"), {
-  engine: {
-    handlebars: require("handlebars"),
-  },
-});
-
-// Load and parse SEO data
-const seo = require("./src/seo.json");
-if (seo.url === "glitch-default") {
-  seo.url = `https://${process.env.PROJECT_DOMAIN}.glitch.me`;
+// Função para obter a hora de São Paulo (UTC-3), importante para servidores online
+function getSaoPauloTime() {
+    return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
 }
 
-/**
- * Our home page route
- *
- * Returns src/pages/index.hbs with data built into it
- */
-fastify.get("/", function (request, reply) {
-  // params is an object we'll pass to our handlebars template
-  let params = { seo: seo };
+// Função que apenas calcula os dados da próxima rota
+function calcularProximaRota() {
+    try {
+        // ### A CORREÇÃO ESTÁ AQUI ###
+        const agora = getSaoPauloTime(); // Removido o espaço
+        let proximaRotaEncontrada = null;
+        let horarioProximaRota = null;
+        const programacaoOrdenada = [...programacao].sort((a, b) => a[0].localeCompare(b[0]));
 
-  // If someone clicked the option for a random color it'll be passed in the querystring
-  if (request.query.randomize) {
-    // We need to load our color data file, pick one at random, and add it to the params
-    const colors = require("./src/colors.json");
-    const allColors = Object.keys(colors);
-    let currentColor = allColors[(allColors.length * Math.random()) << 0];
+        for (const rota of programacaoOrdenada) {
+            const [hora, minuto] = rota[0].split(':');
+            const horarioRotaHoje = getSaoPauloTime(); // Removido o espaço
+            horarioRotaHoje.setHours(hora, minuto, 0, 0);
+            if (horarioRotaHoje >= agora) {
+                proximaRotaEncontrada = { nome: rota[1], horario: `Saída às ${rota[0]}` };
+                horarioProximaRota = horarioRotaHoje;
+                break;
+            }
+        }
 
-    // Add the color properties to the params object
-    params = {
-      color: colors[currentColor],
-      colorError: null,
-      seo: seo,
-    };
-  }
+        if (horarioProximaRota === null && programacaoOrdenada.length > 0) {
+            const primeiraRotaDoDia = programacaoOrdenada[0];
+            const [hora, minuto] = primeiraRotaDoDia[0].split(':');
+            const horarioRotaAmanha = getSaoPauloTime(); // Removido o espaço
+            horarioRotaAmanha.setDate(horarioRotaAmanha.getDate() + 1);
+            horarioRotaAmanha.setHours(hora, minuto, 0, 0);
+            proximaRotaEncontrada = { nome: primeiraRotaDoDia[1], horario: `Saída às ${primeiraRotaDoDia[0]}` };
+            horarioProximaRota = horarioRotaAmanha;
+            if (rotasPassadas.length > 0) {
+                rotasPassadas = [];
+            }
+        }
+        
+        if (proximaRotaEncontrada === null) {
+            proximaRotaEncontrada = { nome: 'Nenhuma rota programada.', horario: '' };
+        }
 
-  // The Handlebars code will be able to access the parameter values and build them into the page
-  return reply.view("/src/pages/index.hbs", params);
+        const rotaAtual = proximaRotaEncontrada;
+        
+        const contagemMs = horarioProximaRota ? horarioProximaRota.getTime() - agora.getTime() : null;
+
+        return {
+            proxima: rotaAtual,
+            passadas: rotasPassadas,
+            contagemRegressiva: contagemMs
+        };
+
+    } catch (error) {
+        console.error("ERRO CRÍTICO na função calcularProximaRota:", error);
+    }
+}
+
+io.on('connection', (socket) => {
+    console.log('Um painel se conectou!');
+    const dadosIniciais = calcularProximaRota();
+    if (dadosIniciais) socket.emit('atualizar-painel', dadosIniciais);
+
+    socket.on('preciso-de-nova-rota', () => {
+        console.log('Cliente pediu nova rota. Calculando...');
+        
+        // Simplesmente recalcula e envia os dados mais recentes
+        const novosDados = calcularProximaRota();
+        if(novosDados) socket.emit('atualizar-painel', novosDados);
+    });
 });
 
-/**
- * Our POST route to handle and react to form submissions
- *
- * Accepts body data indicating the user choice
- */
-fastify.post("/", function (request, reply) {
-  // Build the params object to pass to the template
-  let params = { seo: seo };
-
-  // If the user submitted a color through the form it'll be passed here in the request body
-  let color = request.body.color;
-
-  // If it's not empty, let's try to find the color
-  if (color) {
-    // ADD CODE FROM TODO HERE TO SAVE SUBMITTED FAVORITES
-
-    // Load our color data file
-    const colors = require("./src/colors.json");
-
-    // Take our form submission, remove whitespace, and convert to lowercase
-    color = color.toLowerCase().replace(/\s/g, "");
-
-    // Now we see if that color is a key in our colors object
-    if (colors[color]) {
-      // Found one!
-      params = {
-        color: colors[color],
-        colorError: null,
-        seo: seo,
-      };
-    } else {
-      // No luck! Return the user value as the error property
-      params = {
-        colorError: request.body.color,
-        seo: seo,
-      };
-    }
-  }
-
-  // The Handlebars template will use the parameter values to update the page with the chosen color
-  return reply.view("/src/pages/index.hbs", params);
+// A Glitch usa um 'listener' para iniciar o servidor
+const listener = server.listen(process.env.PORT, () => {
+  console.log("Seu app está ouvindo na porta " + listener.address().port);
 });
-
-// Run the server and report out to the logs
-fastify.listen(
-  { port: process.env.PORT, host: "0.0.0.0" },
-  function (err, address) {
-    if (err) {
-      console.error(err);
-      process.exit(1);
-    }
-    console.log(`Your app is listening on ${address}`);
-  }
-);
