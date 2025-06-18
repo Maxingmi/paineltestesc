@@ -1,4 +1,8 @@
-// server.js - Versão Final com Correção de Sintaxe
+// server.js - Com correção do histórico
+
+// ... (todo o início do código continua igual: process.on, express, http, Server, app, server, io, PORT, programacao)
+process.on('uncaughtException', (err, origin) => { console.error(`FATAL ERROR!`, { err, origin }); });
+process.on('unhandledRejection', (reason, promise) => { console.error(`FATAL ERROR!`, { reason, promise }); });
 
 const express = require('express');
 const http = require('http');
@@ -8,43 +12,34 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Sua programação completa
+const PORT = process.env.PORT || 1000;
+
 const programacao = [
-    ['19:00', 'ROTA 069/072'],
-    ['20:30', 'ROTA 039'],
-    ['22:00', 'ROTA 068/081-043/049'],
-    ['23:00', 'ROTA 029/055/026'],
-    ['23:50', 'ROTA 030/086'],
-    ['00:00', 'ROTA 035/037'],
-    ['00:15', 'ROTA 045/076'],
-    ['01:30', 'ROTA 007/036'],
-    ['02:30', 'ROTA 064/066'],
-    ['03:40', 'ROTA 044'],
-    ['04:00', 'ROTA 033/038'],
-    ['05:00', 'ROTA 006/034']
+    ['19:00', 'ROTA 069/072'], ['20:30', 'ROTA 039'], ['22:00', 'ROTA 068/081-043/049'],
+    ['23:00', 'ROTA 029/055/026'], ['23:50', 'ROTA 030/086'], ['00:00', 'ROTA 035/037'],
+    ['00:15', 'ROTA 045/076'], ['01:30', 'ROTA 007/036'], ['02:30', 'ROTA 064/066'],
+    ['03:40', 'ROTA 044'], ['04:00', 'ROTA 033/038'], ['05:00', 'ROTA 006/034']
 ];
 
 app.use(express.static('public'));
+app.get('/health', (req, res) => res.status(200).send('OK'));
 
 let rotasPassadas = [];
 
-// Função para obter a hora de São Paulo (UTC-3), importante para servidores online
 function getSaoPauloTime() {
     return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
 }
 
-// Função que apenas calcula os dados da próxima rota
 function calcularProximaRota() {
+    // A função de cálculo continua a mesma
     try {
-        // ### A CORREÇÃO ESTÁ AQUI ###
-        const agora = getSaoPauloTime(); // Removido o espaço
+        const agora = getSaoPauloTime();
         let proximaRotaEncontrada = null;
         let horarioProximaRota = null;
         const programacaoOrdenada = [...programacao].sort((a, b) => a[0].localeCompare(b[0]));
-
         for (const rota of programacaoOrdenada) {
             const [hora, minuto] = rota[0].split(':');
-            const horarioRotaHoje = getSaoPauloTime(); // Removido o espaço
+            const horarioRotaHoje = getSaoPauloTime();
             horarioRotaHoje.setHours(hora, minuto, 0, 0);
             if (horarioRotaHoje >= agora) {
                 proximaRotaEncontrada = { nome: rota[1], horario: `Saída às ${rota[0]}` };
@@ -52,34 +47,24 @@ function calcularProximaRota() {
                 break;
             }
         }
-
         if (horarioProximaRota === null && programacaoOrdenada.length > 0) {
             const primeiraRotaDoDia = programacaoOrdenada[0];
             const [hora, minuto] = primeiraRotaDoDia[0].split(':');
-            const horarioRotaAmanha = getSaoPauloTime(); // Removido o espaço
+            const horarioRotaAmanha = getSaoPauloTime();
             horarioRotaAmanha.setDate(horarioRotaAmanha.getDate() + 1);
             horarioRotaAmanha.setHours(hora, minuto, 0, 0);
             proximaRotaEncontrada = { nome: primeiraRotaDoDia[1], horario: `Saída às ${primeiraRotaDoDia[0]}` };
             horarioProximaRota = horarioRotaAmanha;
             if (rotasPassadas.length > 0) {
+                console.log('[NOVO CICLO] Histórico reiniciado.');
                 rotasPassadas = [];
             }
         }
-        
         if (proximaRotaEncontrada === null) {
             proximaRotaEncontrada = { nome: 'Nenhuma rota programada.', horario: '' };
         }
-
-        const rotaAtual = proximaRotaEncontrada;
-        
         const contagemMs = horarioProximaRota ? horarioProximaRota.getTime() - agora.getTime() : null;
-
-        return {
-            proxima: rotaAtual,
-            passadas: rotasPassadas,
-            contagemRegressiva: contagemMs
-        };
-
+        return { proxima: proximaRotaEncontrada, passadas: rotasPassadas, contagemRegressiva: contagemMs };
     } catch (error) {
         console.error("ERRO CRÍTICO na função calcularProximaRota:", error);
     }
@@ -90,16 +75,26 @@ io.on('connection', (socket) => {
     const dadosIniciais = calcularProximaRota();
     if (dadosIniciais) socket.emit('atualizar-painel', dadosIniciais);
 
-    socket.on('preciso-de-nova-rota', () => {
-        console.log('Cliente pediu nova rota. Calculando...');
-        
-        // Simplesmente recalcula e envia os dados mais recentes
+    // ### MUDANÇA AQUI ###
+    // Agora ele recebe a rota que acabou de ser concluída
+    socket.on('preciso-de-nova-rota', (rotaConcluida) => {
+        console.log('Cliente reportou conclusão da rota:', rotaConcluida.nome);
+
+        // Adiciona a rota concluída ao início do histórico
+        if (rotaConcluida && rotaConcluida.nome && !rotaConcluida.nome.includes('Aguardando')) {
+            // Evita adicionar duplicatas
+            if (!rotasPassadas.find(r => r.nome === rotaConcluida.nome)) {
+                rotasPassadas.unshift(rotaConcluida);
+                if (rotasPassadas.length > 10) rotasPassadas.pop(); // Limita o histórico a 10 itens
+            }
+        }
+
+        // Calcula a próxima rota e envia os dados atualizados para TODOS os painéis
         const novosDados = calcularProximaRota();
-        if(novosDados) socket.emit('atualizar-painel', novosDados);
+        if(novosDados) io.emit('atualizar-painel', novosDados);
     });
 });
 
-// A Glitch usa um 'listener' para iniciar o servidor
 const listener = server.listen(process.env.PORT, () => {
   console.log("Seu app está ouvindo na porta " + listener.address().port);
 });

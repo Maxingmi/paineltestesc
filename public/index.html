@@ -4,23 +4,110 @@
     <meta charset="UTF-8">
     <title>Painel de Rotas</title>
     <style>
-        body { background-color: #1a1a2e; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; text-align: center; overflow: hidden; }
-        #painel-principal { background-color: #16213e; padding: 40px 60px; border-radius: 15px; box-shadow: 0 0 30px rgba(0,0,0,0.5); width: 80%; max-width: 900px; transition: background-color 0.5s ease; }
-        #rota { font-size: 8vw; font-weight: bold; color: #fca311; line-height: 1; }
-        #horario { font-size: 4vw; color: #ffffff; margin-top: 15px; }
-        #contagem-regressiva { font-size: 5vw; font-weight: bold; color: #00ffdd; margin-top: 25px; min-height: 6vw; }
-        @keyframes piscar-vermelho { 0%, 100% { background-color: #e63946; } 50% { background-color: #16213e; } }
-        .alerta-piscando { animation: piscar-vermelho 1.5s infinite; }
-        #historico { position: absolute; top: 20px; left: 20px; background-color: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px; text-align: left; max-height: 90vh; overflow-y: auto; }
-        #historico h3 { margin-top: 0; font-size: 1.5em; color: #fca311; border-bottom: 2px solid #fca311; padding-bottom: 5px; }
-        #lista-historico { list-style: none; padding: 0; margin: 0; }
-        #lista-historico li { font-size: 1.2em; opacity: 0.7; padding: 5px 0; border-bottom: 1px solid #3a3a5e; }
-        #lista-historico li:last-child { border-bottom: none; }
+        body {
+            background-color: #1a1a2e;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        #painel-principal {
+            background-color: #16213e;
+            padding: 40px 60px;
+            border-radius: 15px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+            width: 80%;
+            max-width: 900px;
+            transition: background-color 0.5s ease;
+        }
+
+        #rota {
+            font-size: 8vw;
+            font-weight: bold;
+            color: #fca311;
+            line-height: 1;
+        }
+
+        #horario {
+            font-size: 4vw;
+            color: #ffffff;
+            margin-top: 15px;
+        }
+
+        #contagem-regressiva {
+            font-size: 5vw;
+            font-weight: bold;
+            color: #00ffdd;
+            margin-top: 25px;
+            min-height: 6vw;
+        }
+        
+        @keyframes piscar-vermelho {
+            0%, 100% { background-color: #e63946; }
+            50% { background-color: #16213e; }
+        }
+
+        .alerta-piscando {
+            animation: piscar-vermelho 1.5s infinite;
+        }
+
+        #historico {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background-color: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: left;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        #historico h3 {
+            margin-top: 0;
+            font-size: 1.5em;
+            color: #fca311;
+            border-bottom: 2px solid #fca311;
+            padding-bottom: 5px;
+        }
+
+        #lista-historico {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        #lista-historico li {
+            font-size: 1.2em;
+            opacity: 0.7;
+            padding: 5px 0;
+            border-bottom: 1px solid #3a3a5e;
+        }
+
+        #lista-historico li:last-child {
+            border-bottom: none;
+        }
     </style>
 </head>
 <body>
-    <div id="historico"><h3>Anunciadas</h3><ul id="lista-historico"></ul></div>
-    <div id="painel-principal"><div id="rota">--</div><div id="horario">--</div><div id="contagem-regressiva"></div></div>
+
+    <div id="historico">
+        <h3>Anunciadas</h3>
+        <ul id="lista-historico">
+        </ul>
+    </div>
+
+    <div id="painel-principal">
+        <div id="rota">--</div>
+        <div id="horario">--</div>
+        <div id="contagem-regressiva"></div>
+    </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
@@ -34,6 +121,7 @@
         const VINTE_MINUTOS_EM_MS = 20 * 60 * 1000;
 
         let cronometroLocal = null;
+        let dadosAtuais = null;
 
         function formatarTempo(ms) {
             if (ms < 0) ms = 0;
@@ -48,26 +136,27 @@
         socket.on('atualizar-painel', (dados) => {
             console.log("Dados recebidos do servidor:", dados);
 
-            // ### MUDANÇA AQUI: Verificação de segurança ###
-            if (!dados || !dados.proxima || !dados.passadas) {
+            if (!dados || !dados.proxima) {
                 console.error("ERRO: Dados recebidos do servidor estão incompletos!", dados);
                 rotaEl.textContent = "Erro de dados";
-                return; // Para a execução para evitar mais erros
+                return;
             }
-            // #############################################
+
+            dadosAtuais = dados;
 
             if (cronometroLocal) clearInterval(cronometroLocal);
 
-            const proxima = dados.proxima;
-            rotaEl.textContent = proxima.nome;
-            horarioEl.textContent = proxima.horario;
+            rotaEl.textContent = dados.proxima.nome;
+            horarioEl.textContent = dados.proxima.horario;
 
             listaHistoricoEl.innerHTML = '';
-            dados.passadas.forEach(rota => {
-                const li = document.createElement('li');
-                li.textContent = `${rota.horario.replace('Saída às ', '')} - ${rota.nome}`;
-                listaHistoricoEl.appendChild(li);
-            });
+            if (dados.passadas && Array.isArray(dados.passadas)) {
+                dados.passadas.forEach(rota => {
+                    const li = document.createElement('li');
+                    li.textContent = `${rota.horario.replace('Saída às ', '')} - ${rota.nome}`;
+                    listaHistoricoEl.appendChild(li);
+                });
+            }
 
             let contagemMs = dados.contagemRegressiva;
             if (contagemMs !== null && contagemMs > 0) {
@@ -80,7 +169,8 @@
                     }
                     if (contagemMs <= 0) {
                         clearInterval(cronometroLocal);
-                        socket.emit('preciso-de-nova-rota');
+                        console.log("Cronômetro zerou! Enviando rota concluída:", dadosAtuais.proxima);
+                        socket.emit('preciso-de-nova-rota', dadosAtuais.proxima);
                     }
                     contagemMs -= 1000;
                 }, 1000);
