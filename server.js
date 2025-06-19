@@ -1,4 +1,4 @@
-// server.js - CORRIGIDO
+// server.js - CORRIGIDO COM CONFIGURAÇÃO DE CORS PARA VERCELL
 
 process.on('uncaughtException', (err, origin) => { console.error(`FATAL ERROR!`, { err, origin }); });
 process.on('unhandledRejection', (reason, promise) => { console.error(`FATAL ERROR!`, { reason, promise }); });
@@ -9,7 +9,16 @@ const { Server } = require("socket.io");
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+
+// ===== MUDANÇA IMPORTANTE AQUI =====
+// Adicionamos a configuração de CORS para permitir a conexão do front-end na Vercel
+const io = new Server(server, {
+    cors: {
+        origin: "*", // Permite que qualquer site se conecte. Para maior segurança, você pode usar "https://paineltestesc.vercel.app"
+        methods: ["GET", "POST"]
+    }
+});
+// ===================================
 
 const PORT = process.env.PORT || 1000;
 
