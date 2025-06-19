@@ -1,24 +1,22 @@
-// server.js - CORRIGIDO COM CONFIGURAÇÃO DE CORS PARA VERCELL
+// server.js - CORREÇÃO FINAL PARA CAMINHO DE ARQUIVOS ESTÁTICOS NA VERCELL
 
 process.on('uncaughtException', (err, origin) => { console.error(`FATAL ERROR!`, { err, origin }); });
 process.on('unhandledRejection', (reason, promise) => { console.error(`FATAL ERROR!`, { reason, promise }); });
 
 const express = require('express');
 const http = require('http');
+const path = require('path'); // <-- 1. IMPORTAMOS O MÓDULO 'path'
 const { Server } = require("socket.io");
 
 const app = express();
 const server = http.createServer(app);
 
-// ===== MUDANÇA IMPORTANTE AQUI =====
-// Adicionamos a configuração de CORS para permitir a conexão do front-end na Vercel
 const io = new Server(server, {
     cors: {
-        origin: "*", // Permite que qualquer site se conecte. Para maior segurança, você pode usar "https://paineltestesc.vercel.app"
+        origin: "*", 
         methods: ["GET", "POST"]
     }
 });
-// ===================================
 
 const PORT = process.env.PORT || 1000;
 
@@ -29,7 +27,11 @@ const programacao = [
     ['03:40', 'ROTA 044'], ['04:00', 'ROTA 033/038'], ['05:00', 'ROTA 006/034']
 ];
 
-app.use(express.static('public'));
+// ===== MUDANÇA IMPORTANTE AQUI =====
+// 2. Usamos path.join para criar um caminho absoluto para a pasta 'public'
+app.use(express.static(path.join(__dirname, 'public')));
+// ===================================
+
 app.get('/health', (req, res) => res.status(200).send('OK'));
 
 let rotasPassadas = [];
@@ -99,4 +101,9 @@ io.on('connection', (socket) => {
 
 const listener = server.listen(process.env.PORT || PORT, () => {
   console.log("Seu app está ouvindo na porta " + listener.address().port);
+});
+
+// Adicionando um manipulador de rotas raiz para garantir que o express sirva o index.html
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
