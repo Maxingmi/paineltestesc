@@ -111,7 +111,10 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const socket = io();
+        // ===== MUDANÇA IMPORTANTE AQUI =====
+        // Forçamos a conexão a usar apenas 'websocket'
+        const socket = io({ transports: ['websocket'] });
+        // ===================================
 
         const rotaEl = document.getElementById('rota');
         const horarioEl = document.getElementById('horario');
@@ -154,8 +157,6 @@
                 dados.passadas.forEach(rota => {
                     const li = document.createElement('li');
                     
-                    // ===== LINHA CORRIGIDA =====
-                    // Garante que rota.horario seja uma string antes de usar .replace()
                     const horarioFormatado = String(rota.horario || '').replace('Saída às ', '');
                     li.textContent = `${horarioFormatado} - ${rota.nome}`;
                     
