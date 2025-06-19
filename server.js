@@ -1,6 +1,5 @@
-// server.js - Com correção do histórico
+// server.js - CORRIGIDO
 
-// ... (todo o início do código continua igual: process.on, express, http, Server, app, server, io, PORT, programacao)
 process.on('uncaughtException', (err, origin) => { console.error(`FATAL ERROR!`, { err, origin }); });
 process.on('unhandledRejection', (reason, promise) => { console.error(`FATAL ERROR!`, { reason, promise }); });
 
@@ -31,7 +30,6 @@ function getSaoPauloTime() {
 }
 
 function calcularProximaRota() {
-    // A função de cálculo continua a mesma
     try {
         const agora = getSaoPauloTime();
         let proximaRotaEncontrada = null;
@@ -75,26 +73,21 @@ io.on('connection', (socket) => {
     const dadosIniciais = calcularProximaRota();
     if (dadosIniciais) socket.emit('atualizar-painel', dadosIniciais);
 
-    // ### MUDANÇA AQUI ###
-    // Agora ele recebe a rota que acabou de ser concluída
     socket.on('preciso-de-nova-rota', (rotaConcluida) => {
         console.log('Cliente reportou conclusão da rota:', rotaConcluida.nome);
 
-        // Adiciona a rota concluída ao início do histórico
         if (rotaConcluida && rotaConcluida.nome && !rotaConcluida.nome.includes('Aguardando')) {
-            // Evita adicionar duplicatas
             if (!rotasPassadas.find(r => r.nome === rotaConcluida.nome)) {
                 rotasPassadas.unshift(rotaConcluida);
-                if (rotasPassadas.length > 10) rotasPassadas.pop(); // Limita o histórico a 10 itens
+                if (rotasPassadas.length > 10) rotasPassadas.pop();
             }
         }
 
-        // Calcula a próxima rota e envia os dados atualizados para TODOS os painéis
         const novosDados = calcularProximaRota();
         if(novosDados) io.emit('atualizar-painel', novosDados);
     });
 });
 
-const listener = server.listen(process.env.PORT, () => {
+const listener = server.listen(process.env.PORT || PORT, () => {
   console.log("Seu app está ouvindo na porta " + listener.address().port);
 });

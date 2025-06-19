@@ -153,7 +153,12 @@
             if (dados.passadas && Array.isArray(dados.passadas)) {
                 dados.passadas.forEach(rota => {
                     const li = document.createElement('li');
-                    li.textContent = `${rota.horario.replace('Saída às ', '')} - ${rota.nome}`;
+                    
+                    // ===== LINHA CORRIGIDA =====
+                    // Garante que rota.horario seja uma string antes de usar .replace()
+                    const horarioFormatado = String(rota.horario || '').replace('Saída às ', '');
+                    li.textContent = `${horarioFormatado} - ${rota.nome}`;
+                    
                     listaHistoricoEl.appendChild(li);
                 });
             }
